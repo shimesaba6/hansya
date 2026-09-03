@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>居合切り 反射神経測定ゲーム</title>
+  <!-- 本格的な和風フォント（明朝体）を読み込み -->
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #0d0d0d;
+      color: #f2f2f2;
+      font-family: 'Shippori Mincho', serif; /* 和風フォント */
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* =========================================
+       左側：メインゲーム画面
+    ========================================= */
+    #game-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: background-color 0.1s, box-shadow 0.1s;
+      border-right: 2px solid #444;
+      background: radial-gradient(circle, #2a2a2a 0%, #0d0d0d 100%);
+    }
+
+    /* 各状態の背景演出 */
+    .state-wait { background: radial-gradient(circle, #2a2a2a 0%, #0d0d0d 100%) !important; }
+    .state-ready { background: radial-gradient(circle, #554400 0%, #111 100%) !important; }
+    .state-go { 
+      background-color: #990000 !important; 
+      box-shadow: inset 0 0 100px #ff0000;
+    }
+    .state-result { background: radial-gradient(circle, #003311 0%, #0d0d0d 100%) !important; }
+    .state-foul { background: radial-gradient(circle, #330033 0%, #0d0d0d 100%) !important; }
+
+    #message {
+      font-size: 100px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      letter-spacing: 15px;
+      text-shadow: 0 5px 15px rgba(0,0,0,0.8);
+      transition: transform 0.1s;
+    }
+
+    /* 「斬れ！！」の時に文字を強調するアニメーション */
+    .slash-anim {
+      transform: scale(1.3);
+      color: #ffffff;
+      text-shadow: 0 0 30px #ffffff, 0 0 50px #ffaaaa;
+    }
+
+    #time-display {
+      font-family: 'Share Tech Mono', monospace; /* 数字だけデジタルっぽく */
+      font-size: 80px;
+      color: #ffcc00;
+      text-shadow: 0 0 20px #ffaa00;
+      display: none;
+      margin-top: 20px;
+    }
+
+    #rank-display {
+      font-size: 50px;
+      margin-top: 30px;
+      color: #00ffcc;
+      text-shadow: 0 0 15px #00aaff;
+      display: none;
+      letter-spacing: 5px;
+    }
+
+    #connectBtn {
+      font-family: 'Shippori Mincho', serif;
+      font-size: 30px;
+      padding: 15px 50px;
+      background: linear-gradient(to bottom, #555, #222);
+      color: white;
+      border: 2px solid #777;
+      border-radius: 5px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.8);
+      letter-spacing: 5px;
+      position: absolute;
+    }
+    #connectBtn:active {
+      transform: translateY(4px);
+      box-shadow: 0 0 0 rgba(0,0,0,0.8);
+    }
+
+    /* =========================================
+       右側：ランキング画面 (TOP 10)
+    ========================================= */
+    #ranking-area {
+      width: 350px;
+      background-color: #111;
+      border-left: 5px solid #880000;
+      padding: 30px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -10px 0 30px rgba(0,0,0,0.8);
+    }
+
+    #ranking-area h2 {
+      text-align: center;
+      font-size: 32px;
+      color: #d4a017;
+      border-bottom: 2px solid #d4a017;
+      padding-bottom: 15px;
+      margin-top: 0;
+      letter-spacing: 5px;
+    }
+
+    #ranking-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    #ranking-list li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 24px;
+      padding: 15px 0;
+      border-bottom: 1px dashed #444;
+    }
+
+    .rank-num {
+      color: #888;
+      font-size: 20px;
+    }
+
+    /* 1位〜3位は色を変えて特別感を演出 */
+    .rank-1 .rank-num { color: #ffd700; font-size: 28px; font-weight: bold; text-shadow: 0 0 10px #ffd700; }
+    .rank-2 .rank-num { color: #c0c0c0; font-size: 26px; font-weight: bold; }
+    .rank-3 .rank-num { color: #c47222; font-size: 24px; font-weight: bold; }
+
+    .rank-time {
+      font-family: 'Share Tech Mono', monospace;
+      color: #fff;
+    }
+
+    /* 記録リセットボタン（右下） */
+    #resetBtn {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: transparent;
+      border: 1px solid #444;
+      color: #666;
+      cursor: pointer;
+      font-family: 'Shippori Mincho', serif;
+      transition: 0.2s;
+    }
+    #resetBtn:hover {
+      color: #ff3333;
+      border-color: #ff3333;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- メインゲーム画面 -->
+  <div id="game-area">
+    <button id="connectBtn">試練を開始する</button>
+    <div id="message"></div>
+    <div id="time-display">0.000 秒</div>
+    <div id="rank-display"></div>
+  </div>
+
+  <!-- ランキング画面 -->
+  <div id="ranking-area">
+    <h2>歴代 達人録</h2>
+    <ul id="ranking-list">
+      <!-- JavaScriptでここにランキングが追加されます -->
+    </ul>
+    <button id="resetBtn" onclick="resetRanking()">記録を初期化</button>
+  </div>
+
+  <script>
+    const THRESHOLD = 60; // 反応する距離(cm)
+    
+    let port;
+    let reader;
+    let gameState = 'IDLE'; 
+    let startTime = 0;
+    let timeoutId = null;
+
+    // --- ランキングデータの読み込み ---
+    let topScores = JSON.parse(localStorage.getItem('iaiRanking')) || [];
+
+    const connectBtn = document.getElementById('connectBtn');
+    const messageEl = document.getElementById('message');
+    const timeEl = document.getElementById('time-display');
+    const rankEl = document.getElementById('rank-display');
+    const gameArea = document.getElementById('game-area');
+    const rankingList = document.getElementById('ranking-list');
+
+    // ランキングの画面表示を更新する関数
+    function updateRankingDisplay() {
+      rankingList.innerHTML = '';
+      if (topScores.length === 0) {
+        rankingList.innerHTML = '<li style="color:#555; text-align:center; justify-content:center;">記録なし</li>';
+        return;
+      }
+
+      topScores.forEach((score, index) => {
+        const li = document.createElement('li');
+        // 1位〜3位に専用のクラスを付与
+        if (index === 0) li.classList.add('rank-1');
+        else if (index === 1) li.classList.add('rank-2');
+        else if (index === 2) li.classList.add('rank-3');
+
+        li.innerHTML = `
+          <span class="rank-num">${index + 1}位</span> 
+          <span class="rank-time">${score.toFixed(3)} 秒</span>
+        `;
+        rankingList.appendChild(li);
+      });
+    }
+
+    // 新しいスコアを追加して保存する関数
+    function addScore(newScore) {
+      topScores.push(newScore);
+      topScores.sort((a, b) => a - b); // タイムが短い（速い）順に並び替え
+      topScores = topScores.slice(0, 10); // 上位10件だけを残す
+      
+      localStorage.setItem('iaiRanking', JSON.stringify(topScores)); // ブラウザに保存
+      updateRankingDisplay();
+    }
+
+    // ランキングをリセットする処理
+    function resetRanking() {
+      if (confirm("これまでの達人録（記録）をすべて消去しますか？")) {
+        topScores = [];
+        localStorage.removeItem('iaiRanking');
+        updateRankingDisplay();
+      }
+    }
+
+    // 初期化時にランキングを表示
+    updateRankingDisplay();
+
+
+    // --- ゲーム進行管理 ---
+    function changeState(newState) {
+      gameState = newState;
+      gameArea.className = ''; 
+      timeEl.style.display = 'none';
+      rankEl.style.display = 'none';
+      messageEl.classList.remove('slash-anim'); // アニメーション解除
+
+      if (newState === 'WAIT') {
+        gameArea.classList.add('state-wait');
+        messageEl.innerText = "雷の呼吸";
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => changeState('READY'), 3000);
+      } 
+      else if (newState === 'READY') {
+        gameArea.classList.add('state-ready');
+        messageEl.innerText = "一の型...";
+        let randomDelay = Math.floor(Math.random() * 4000) + 2000;
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => changeState('GO'), randomDelay);
+      } 
+      else if (newState === 'GO') {
+        gameArea.classList.add('state-go');
+        messageEl.innerText = "霹靂一閃！！";
+        messageEl.classList.add('slash-anim'); // 迫力ある文字拡大
+        startTime = performance.now();
+      } 
+      else if (newState === 'RESULT') {
+        gameArea.classList.add('state-result');
+        messageEl.innerText = "見事！";
+        timeEl.style.display = 'block';
+        rankEl.style.display = 'block';
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => changeState('WAIT'), 6000); // 記録を見るため少し長く表示
+      } 
+      else if (newState === 'FOUL') {
+        gameArea.classList.add('state-foul');
+        messageEl.innerText = "無念...（フライング）";
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => changeState('WAIT'), 3000);
+      }
+    }
+
+    function calculateResult() {
+      let endTime = performance.now();
+      let reactionTime = (endTime - startTime) / 1000; 
+      
+      timeEl.innerText = reactionTime.toFixed(3) + " 秒";
+
+      if (reactionTime < 0.150) rankEl.innerText = "称号：神速の侍";
+      else if (reactionTime < 0.250) rankEl.innerText = "称号：免許皆伝";
+      else if (reactionTime < 0.350) rankEl.innerText = "称号：一人前の剣士";
+      else if (reactionTime < 0.500) rankEl.innerText = "称号：修行中の身";
+      else rankEl.innerText = "称号：素人";
+
+      changeState('RESULT');
+      
+      // ランキングへ記録を追加！
+      addScore(reactionTime);
+    }
+
+    // --- センサー連携処理 ---
+    connectBtn.addEventListener('click', async () => {
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 9600 });
+        
+        connectBtn.style.display = 'none';
+        changeState('WAIT'); 
+
+        const textDecoder = new TextDecoderStream();
+        const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+        reader = textDecoder.readable.getReader();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) { reader.releaseLock(); break; }
+          if (value) {
+            buffer += value;
+            let lines = buffer.split('\n');
+            buffer = lines.pop(); 
+            
+            for (let line of lines) {
+              let distance = parseInt(line.trim());
+              
+              if (!isNaN(distance)) {
+                if (distance < THRESHOLD) {
+                  if (gameState === 'READY') {
+                    changeState('FOUL');
+                  } 
+                  else if (gameState === 'GO') {
+                    calculateResult();
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(error);
+        alert("接続エラー: センサーが正しく接続されているか確認してください。");
+      }
+    });
+  </script>
+</body>
+</html>
