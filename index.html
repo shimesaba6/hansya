@@ -215,7 +215,6 @@
 
       topScores.forEach((score, index) => {
         const li = document.createElement('li');
-        // 1位〜3位に専用のクラスを付与
         if (index === 0) li.classList.add('rank-1');
         else if (index === 1) li.classList.add('rank-2');
         else if (index === 2) li.classList.add('rank-3');
@@ -231,10 +230,10 @@
     // 新しいスコアを追加して保存する関数
     function addScore(newScore) {
       topScores.push(newScore);
-      topScores.sort((a, b) => a - b); // タイムが短い（速い）順に並び替え
-      topScores = topScores.slice(0, 10); // 上位10件だけを残す
+      topScores.sort((a, b) => a - b); 
+      topScores = topScores.slice(0, 10); 
       
-      localStorage.setItem('iaiRanking', JSON.stringify(topScores)); // ブラウザに保存
+      localStorage.setItem('iaiRanking', JSON.stringify(topScores)); 
       updateRankingDisplay();
     }
 
@@ -309,7 +308,7 @@
       addScore(reactionTime);
     }
 
-    // --- センサー連携処理 (WebUSB CH340専用版・エラー詳細表示付き) ---
+    // --- センサー連携処理 (WebUSB CH340専用版・強行突破仕様) ---
     connectBtn.addEventListener('click', async () => {
       try {
         usbDevice = await navigator.usb.requestDevice({ 
@@ -318,28 +317,39 @@
         
         await usbDevice.open();
         
-        // 【改良】Androidで既に設定済みの場合のエラーを回避
         if (usbDevice.configuration === null) {
           await usbDevice.selectConfiguration(1);
         }
-        
         await usbDevice.claimInterface(0);
 
-        await usbDevice.controlTransferOut({ requestType: 'vendor', recipient: 'device', request: 0x5F, value: 0x0000, index: 0x0000 });
-        await usbDevice.controlTransferOut({ requestType: 'vendor', recipient: 'device', request: 0xA1, value: 0x0000, index: 0x0000 });
-        await usbDevice.controlTransferOut({ requestType: 'vendor', recipient: 'device', request: 0x9A, value: 0x1312, index: 0xB282 }); 
-        await usbDevice.controlTransferOut({ requestType: 'vendor', recipient: 'device', request: 0xA4, value: 0x00FF, index: 0x0000 });
+        // スマホのUSB認識ラグを吸収するため少し待機
+        await new Promise(r => setTimeout(r, 200));
+
+        // 通信設定（エラーが出ても無視して次に進む関数）
+        const sendInit = async (req, val, idx) => {
+          try {
+            await usbDevice.controlTransferOut({ requestType: 'vendor', recipient: 'device', request: req, value: val, index: idx });
+          } catch(e) {
+            console.warn(`設定コマンド ${req} がOSにブロックされましたがスキップします:`, e);
+          }
+        };
+
+        // CH340の初期化と9600bps設定
+        await sendInit(0x5F, 0x0000, 0x0000);
+        await sendInit(0xA1, 0x0000, 0x0000);
+        await sendInit(0x9A, 0x1312, 0xB282); 
+        await sendInit(0xA4, 0x00FF, 0x0000);
 
         connectBtn.style.display = 'none';
         changeState('WAIT'); 
         isReading = true;
         
+        // エラーを無視して受信ループへ突入
         readLoop();
 
       } catch (error) {
         console.error(error);
-        // 【改良】何のエラーか具体的に画面に出す
-        alert("【エラー詳細】\n" + error.name + "\n" + error.message);
+        alert("【接続エラー】\n" + error.name + "\n" + error.message);
       }
     });
 
