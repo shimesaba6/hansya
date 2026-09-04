@@ -247,7 +247,6 @@
       }
     }
 
-    // 初期化時にランキングを表示
     updateRankingDisplay();
 
 
@@ -257,7 +256,7 @@
       gameArea.className = ''; 
       timeEl.style.display = 'none';
       rankEl.style.display = 'none';
-      messageEl.classList.remove('slash-anim'); // アニメーション解除
+      messageEl.classList.remove('slash-anim'); 
 
       if (newState === 'WAIT') {
         gameArea.classList.add('state-wait');
@@ -275,7 +274,7 @@
       else if (newState === 'GO') {
         gameArea.classList.add('state-go');
         messageEl.innerText = "霹靂一閃！！";
-        messageEl.classList.add('slash-anim'); // 迫力ある文字拡大
+        messageEl.classList.add('slash-anim'); 
         startTime = performance.now();
       } 
       else if (newState === 'RESULT') {
@@ -284,7 +283,7 @@
         timeEl.style.display = 'block';
         rankEl.style.display = 'block';
         clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => changeState('WAIT'), 6000); // 記録を見るため少し長く表示
+        timeoutId = setTimeout(() => changeState('WAIT'), 6000); 
       } 
       else if (newState === 'FOUL') {
         gameArea.classList.add('state-foul');
@@ -307,24 +306,25 @@
       else rankEl.innerText = "称号：素人";
 
       changeState('RESULT');
-      
-      // ランキングへ記録を追加！
       addScore(reactionTime);
     }
 
-    // --- センサー連携処理 (WebUSB CH340専用版) ---
+    // --- センサー連携処理 (WebUSB CH340専用版・エラー詳細表示付き) ---
     connectBtn.addEventListener('click', async () => {
       try {
-        // CH340チップ (Vendor ID: 0x1A86) を指定してUSBデバイスを要求
         usbDevice = await navigator.usb.requestDevice({ 
           filters: [{ vendorId: 0x1A86 }] 
         });
         
         await usbDevice.open();
-        await usbDevice.selectConfiguration(1);
+        
+        // 【改良】Androidで既に設定済みの場合のエラーを回避
+        if (usbDevice.configuration === null) {
+          await usbDevice.selectConfiguration(1);
+        }
+        
         await usbDevice.claimInterface(0);
 
-        // CH340特有の初期化と通信速度（9600ボーレート）の直接設定
         await usbDevice.controlTransferOut({ requestType: 'vendor', recipient: 'device', request: 0x5F, value: 0x0000, index: 0x0000 });
         await usbDevice.controlTransferOut({ requestType: 'vendor', recipient: 'device', request: 0xA1, value: 0x0000, index: 0x0000 });
         await usbDevice.controlTransferOut({ requestType: 'vendor', recipient: 'device', request: 0x9A, value: 0x1312, index: 0xB282 }); 
@@ -334,18 +334,17 @@
         changeState('WAIT'); 
         isReading = true;
         
-        // データ受信ループの開始
         readLoop();
 
       } catch (error) {
         console.error(error);
-        alert("接続エラー: デバイスが選択されなかったか、他のアプリがUSBを占有しています。");
+        // 【改良】何のエラーか具体的に画面に出す
+        alert("【エラー詳細】\n" + error.name + "\n" + error.message);
       }
     });
 
     async function readLoop() {
       let buffer = "";
-      // CH340のデータ受信用エンドポイントを自動探索
       const endpoints = usbDevice.configuration.interfaces[0].alternate.endpoints;
       const inEndpoint = endpoints.find(e => e.direction === 'in');
       
@@ -358,13 +357,12 @@
       
       while (isReading && usbDevice) {
         try {
-          // データを最大64バイトずつ受信
           const result = await usbDevice.transferIn(inEndpoint.endpointNumber, 64);
           
           if (result.status === 'ok') {
             buffer += decoder.decode(result.data);
             let lines = buffer.split('\n');
-            buffer = lines.pop(); // 途中で途切れたデータは次回の受信に回す
+            buffer = lines.pop(); 
             
             for (let line of lines) {
               let distance = parseInt(line.trim());
@@ -381,7 +379,7 @@
           }
         } catch (error) {
           console.error("通信エラー:", error);
-          break; // USBケーブルが抜かれた場合など
+          break; 
         }
       }
     }
